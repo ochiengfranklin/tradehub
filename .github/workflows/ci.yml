@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: tp
+          POSTGRES_PASSWORD: tp_ci_password
+          POSTGRES_DB: tp
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U tp -d tp"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgres://tp:tp_ci_password@localhost:5432/tp
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
+      # Smoke-test the SQL against a real database, then run again to prove it is idempotent.
+      - name: Apply migrations
+        run: npm run migrate
+      - name: Re-apply migrations (must be a no-op)
+        run: npm run migrate
